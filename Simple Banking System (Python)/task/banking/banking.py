@@ -1,7 +1,6 @@
 import random
 import sqlite3
 
-
 conn = sqlite3.connect('card.s3db')
 cur = conn.cursor()
 
@@ -52,6 +51,56 @@ def create_account():
     print(pin)
 
 
+def add_income(card_number):
+    amount = int(input("Enter income:\n"))
+    cur.execute('UPDATE card SET balance = balance + ? WHERE number = ?', (amount, card_number))
+    conn.commit()
+    print("Income was added!")
+
+
+def do_transfer(card_number):
+    print("Transfer")
+    receiver_card = input("Enter card number:\n")
+
+    # Validate card number with Luhn algorithm
+    if not luhn_checksum(receiver_card):
+        print("Probably you made a mistake in the card number. Please try again!")
+        return
+
+    # Check if receiver exists
+    cur.execute('SELECT * FROM card WHERE number = ?', (receiver_card,))
+    receiver_account = cur.fetchone()
+
+    if receiver_account is None:
+        print("Such a card does not exist.")
+        return
+
+    # Prevent transferring to the same account
+    if receiver_card == card_number:
+        print("You can't transfer money to the same account!")
+        return
+
+    # Get the transfer amount and check if the balance is sufficient
+    amount = int(input("Enter how much money you want to transfer:\n"))
+    cur.execute('SELECT balance FROM card WHERE number = ?', (card_number,))
+    sender_balance = cur.fetchone()[0]
+
+    if amount > sender_balance:
+        print("Not enough money!")
+    else:
+        # Perform the transfer
+        cur.execute('UPDATE card SET balance = balance - ? WHERE number = ?', (amount, card_number))
+        cur.execute('UPDATE card SET balance = balance + ? WHERE number = ?', (amount, receiver_card))
+        conn.commit()
+        print("Success!")
+
+
+def close_account(card_number):
+    cur.execute('DELETE FROM card WHERE number = ?', (card_number,))
+    conn.commit()
+    print("The account has been closed!")
+
+
 def log_into_account():
     card_number = input("\nEnter your card number:\n")
     pin = input("Enter your PIN:\n")
@@ -63,12 +112,24 @@ def log_into_account():
         print("\nYou have successfully logged in!")
         while True:
             print("\n1. Balance")
-            print("2. Log out")
+            print("2. Add income")
+            print("3. Do transfer")
+            print("4. Close account")
+            print("5. Log out")
             print("0. Exit")
             choice = input()
             if choice == "1":
-                print(f"\nBalance: {account[3]}")
+                cur.execute('SELECT balance FROM card WHERE number = ?', (card_number,))
+                balance = cur.fetchone()[0]
+                print(f"\nBalance: {balance}")
             elif choice == "2":
+                add_income(card_number)
+            elif choice == "3":
+                do_transfer(card_number)
+            elif choice == "4":
+                close_account(card_number)
+                break
+            elif choice == "5":
                 print("\nYou have successfully logged out!")
                 break
             elif choice == "0":
@@ -99,4 +160,5 @@ def main():
             print("\nInvalid option. Try again.")
 
 
+# Start the program
 main()
